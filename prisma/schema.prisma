@@ -1,0 +1,539 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          BigInt    @id @default(autoincrement())
+  username    String    @unique @db.VarChar(50)
+  password    String    @db.VarChar(255)
+  email       String?   @unique @db.VarChar(100)
+  realName    String?   @map("real_name") @db.VarChar(50)
+  avatar      String?   @db.VarChar(255)
+  status      Int       @default(1) @map("status")
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+  createdBy   BigInt?   @map("created_by")
+  updatedBy   BigInt?   @map("updated_by")
+
+  userRoles           UserRole[]
+  createdTasks        Task[]          @relation("TaskCreator")
+  taskAssignments     TaskAssignment[] @relation("AssignedTasks")
+  assignedTasks       TaskAssignment[] @relation("TaskAssigner")
+  taskExecutions      TaskExecution[] @relation("TaskExecutor")
+  qualityChecks       QualityCheck[]
+  externalDataSources ExternalDataSource[] @relation("DataSourceCreator")
+  syncTasks           SyncTask[]      @relation("SyncTaskCreator")
+
+  @@map("dgmp_users")
+  @@index([username])
+  @@index([email])
+  @@index([status])
+}
+
+model Role {
+  id          BigInt   @id @default(autoincrement())
+  code        String   @unique @db.VarChar(50)
+  name        String   @db.VarChar(50)
+  description String?  @db.VarChar(255)
+  status      Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@map("dgmp_roles")
+  @@index([code])
+}
+
+model Permission {
+  id          BigInt   @id @default(autoincrement())
+  code        String   @unique @db.VarChar(100)
+  name        String   @db.VarChar(100)
+  module      String   @db.VarChar(50)
+  action      String   @db.VarChar(50)
+  description String?  @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  rolePermissions RolePermission[]
+
+  @@map("dgmp_permissions")
+  @@index([code])
+  @@index([module])
+}
+
+model UserRole {
+  id        BigInt   @id @default(autoincrement())
+  userId    BigInt   @map("user_id")
+  roleId    BigInt   @map("role_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId], name: "uk_user_role")
+  @@map("dgmp_user_roles")
+}
+
+model RolePermission {
+  id           BigInt   @id @default(autoincrement())
+  roleId       BigInt   @map("role_id")
+  permissionId BigInt   @map("permission_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId], name: "uk_role_permission")
+  @@map("dgmp_role_permissions")
+}
+
+model DataType {
+  id             BigInt   @id @default(autoincrement())
+  code           String   @unique @db.VarChar(50)
+  name           String   @db.VarChar(50)
+  description    String?  @db.VarChar(255)
+  validationRule String?  @map("validation_rule") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  dataElements DataElement[]
+
+  @@map("dgmp_data_types")
+}
+
+model FormatRule {
+  id            BigInt   @id @default(autoincrement())
+  code          String   @unique @db.VarChar(50)
+  name          String   @db.VarChar(100)
+  description   String?  @db.Text
+  regexPattern  String?  @map("regex_pattern") @db.VarChar(500)
+  example       String?  @db.VarChar(255)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+
+  dataElements DataElement[]
+
+  @@map("dgmp_format_rules")
+}
+
+model DataElementCategory {
+  id        BigInt   @id @default(autoincrement())
+  code      String   @unique @db.VarChar(50)
+  name      String   @db.VarChar(100)
+  parentId  BigInt?  @map("parent_id")
+  level     Int      @default(1)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  dataElements DataElement[]
+  parent      DataElementCategory? @relation("CategoryParent", fields: [parentId], references: [id])
+  children    DataElementCategory[] @relation("CategoryParent")
+
+  @@map("dgmp_data_element_categories")
+  @@index([parentId])
+}
+
+model DataElement {
+  id              BigInt   @id @default(autoincrement())
+  code            String   @unique @db.VarChar(50)
+  name            String   @db.VarChar(100)
+  description     String?  @db.Text
+  dataTypeId      BigInt?  @map("data_type_id")
+  formatRuleId    BigInt?  @map("format_rule_id")
+  length          Int?
+  isRequired      Boolean  @default(false) @map("is_required")
+  defaultValue    String?  @map("default_value") @db.VarChar(255)
+  valueRange      String?  @map("value_range") @db.VarChar(255)
+  businessRule    String?  @map("business_rule") @db.Text
+  categoryId      BigInt?  @map("category_id")
+  version         Int      @default(1)
+  status          Int      @default(1)
+  sourceSystem    String?  @map("source_system") @db.VarChar(100)
+  sourceCode      String?  @map("source_code") @db.VarChar(100)
+  syncEnabled     Boolean  @default(false) @map("sync_enabled")
+  syncFrequency   String?  @map("sync_frequency") @db.VarChar(50)
+  lastSyncTime    DateTime? @map("last_sync_time")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
+  createdBy       BigInt?  @map("created_by")
+  updatedBy       BigInt?  @map("updated_by")
+
+  dataType       DataType?            @relation(fields: [dataTypeId], references: [id])
+  formatRule     FormatRule?          @relation(fields: [formatRuleId], references: [id])
+  category       DataElementCategory? @relation(fields: [categoryId], references: [id])
+  versions       DataElementVersion[]
+  tasks          Task[]               @relation("TaskDataElement")
+
+  @@map("dgmp_data_elements")
+  @@index([code])
+  @@index([categoryId])
+  @@index([status])
+  @@index([sourceSystem, sourceCode], name: "idx_source")
+}
+
+model DataElementVersion {
+  id           BigInt   @id @default(autoincrement())
+  dataElementId BigInt  @map("data_element_id")
+  version      Int
+  content      Json
+  changeLog    String?  @map("change_log") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+  createdBy    BigInt?  @map("created_by")
+
+  dataElement DataElement @relation(fields: [dataElementId], references: [id], onDelete: Cascade)
+
+  @@unique([dataElementId, version], name: "uk_element_version")
+  @@map("dgmp_data_element_versions")
+}
+
+model RuleCategory {
+  id          BigInt   @id @default(autoincrement())
+  code        String   @unique @db.VarChar(50)
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  qualityRules QualityRule[]
+
+  @@map("dgmp_rule_categories")
+}
+
+model RuleTemplate {
+  id                BigInt   @id @default(autoincrement())
+  code              String   @unique @db.VarChar(50)
+  name              String   @db.VarChar(100)
+  description       String?  @db.Text
+  ruleType          String   @map("rule_type") @db.VarChar(50)
+  templateExpression String?  @map("template_expression") @db.Text
+  parameters        Json?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@map("dgmp_rule_templates")
+}
+
+model QualityRule {
+  id            BigInt   @id @default(autoincrement())
+  code          String   @unique @db.VarChar(50)
+  name          String   @db.VarChar(100)
+  description   String?  @db.Text
+  ruleType      String   @map("rule_type") @db.VarChar(50)
+  dataSource    String?  @map("data_source") @db.VarChar(100)
+  tableName     String?  @map("table_name") @db.VarChar(100)
+  fieldName     String?  @map("field_name") @db.VarChar(100)
+  ruleExpression String?  @map("rule_expression") @db.Text
+  severity      String   @default("error") @db.VarChar(20)
+  categoryId    BigInt?  @map("category_id")
+  version       Int      @default(1)
+  status        Int      @default(1)
+  sourceSystem  String?  @map("source_system") @db.VarChar(100)
+  sourceCode    String?  @map("source_code") @db.VarChar(100)
+  syncEnabled   Boolean  @default(false) @map("sync_enabled")
+  syncFrequency String?  @map("sync_frequency") @db.VarChar(50)
+  lastSyncTime  DateTime? @map("last_sync_time")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+  createdBy     BigInt?  @map("created_by")
+  updatedBy     BigInt?  @map("updated_by")
+
+  category RuleCategory?    @relation(fields: [categoryId], references: [id])
+  versions RuleVersion[]
+  tasks    Task[]           @relation("TaskQualityRule")
+  issues   QualityIssue[]
+
+  @@map("dgmp_quality_rules")
+  @@index([code])
+  @@index([ruleType])
+  @@index([status])
+  @@index([sourceSystem, sourceCode], name: "idx_source")
+}
+
+model RuleVersion {
+  id        BigInt   @id @default(autoincrement())
+  ruleId    BigInt   @map("rule_id")
+  version   Int
+  content   Json
+  changeLog String?  @map("change_log") @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy BigInt?  @map("created_by")
+
+  rule QualityRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@unique([ruleId, version], name: "uk_rule_version")
+  @@map("dgmp_rule_versions")
+}
+
+model MappingRule {
+  id           BigInt   @id @default(autoincrement())
+  code         String   @unique @db.VarChar(50)
+  name         String   @db.VarChar(100)
+  description  String?  @db.Text
+  sourceSystem String   @map("source_system") @db.VarChar(100)
+  sourceTable  String   @map("source_table") @db.VarChar(100)
+  targetSystem String   @map("target_system") @db.VarChar(100)
+  targetTable  String   @map("target_table") @db.VarChar(100)
+  mappingType  String   @default("one_to_one") @map("mapping_type") @db.VarChar(20)
+  status       Int      @default(1)
+  syncSourceSystem String?  @map("sync_source_system") @db.VarChar(100)
+  sourceCode   String?  @map("sync_source_code") @db.VarChar(100)
+  syncEnabled  Boolean  @default(false) @map("sync_enabled")
+  syncFrequency String?  @map("sync_frequency") @db.VarChar(50)
+  lastSyncTime DateTime? @map("last_sync_time")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+  createdBy    BigInt?  @map("created_by")
+  updatedBy    BigInt?  @map("updated_by")
+
+  fieldMappings FieldMapping[]
+  valueMappings ValueMapping[]
+  tasks         Task[]       @relation("TaskMappingRule")
+
+  @@map("dgmp_mapping_rules")
+  @@index([code])
+  @@index([sourceSystem, sourceTable])
+  @@index([targetSystem, targetTable])
+  @@index([syncSourceSystem, sourceCode], name: "idx_sync_source")
+}
+
+model FieldMapping {
+  id             BigInt   @id @default(autoincrement())
+  mappingRuleId  BigInt   @map("mapping_rule_id")
+  sourceField    String   @map("source_field") @db.VarChar(100)
+  targetField    String   @map("target_field") @db.VarChar(100)
+  transformExpression String? @map("transform_expression") @db.Text
+  sortOrder      Int      @default(0) @map("sort_order")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  mappingRule MappingRule @relation(fields: [mappingRuleId], references: [id], onDelete: Cascade)
+
+  @@map("dgmp_field_mappings")
+}
+
+model ValueMapping {
+  id             BigInt   @id @default(autoincrement())
+  mappingRuleId  BigInt   @map("mapping_rule_id")
+  fieldMappingId BigInt?  @map("field_mapping_id")
+  sourceValue    String   @map("source_value") @db.VarChar(255)
+  targetValue    String   @map("target_value") @db.VarChar(255)
+  description    String?  @db.VarChar(255)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  mappingRule MappingRule @relation(fields: [mappingRuleId], references: [id], onDelete: Cascade)
+
+  @@map("dgmp_value_mappings")
+}
+
+model Task {
+  id                    BigInt   @id @default(autoincrement())
+  code                  String   @unique @db.VarChar(50)
+  name                  String   @db.VarChar(100)
+  description           String?  @db.Text
+  taskType              String   @map("task_type") @db.VarChar(50)
+  priority              String   @default("medium") @db.VarChar(20)
+  status                String   @default("pending") @db.VarChar(20)
+  relatedDataElementId  BigInt?  @map("related_data_element_id")
+  relatedQualityRuleId  BigInt?  @map("related_quality_rule_id")
+  relatedMappingRuleId  BigInt?  @map("related_mapping_rule_id")
+  planStartTime         DateTime? @map("plan_start_time")
+  planEndTime           DateTime? @map("plan_end_time")
+  actualStartTime       DateTime? @map("actual_start_time")
+  actualEndTime         DateTime? @map("actual_end_time")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at")
+  createdBy             BigInt?  @map("created_by")
+  updatedBy             BigInt?  @map("updated_by")
+
+  creator       User?             @relation("TaskCreator", fields: [createdBy], references: [id])
+  assignments   TaskAssignment[]
+  executions    TaskExecution[]
+  dataElement   DataElement?      @relation("TaskDataElement", fields: [relatedDataElementId], references: [id])
+  qualityRule   QualityRule?      @relation("TaskQualityRule", fields: [relatedQualityRuleId], references: [id])
+  mappingRule   MappingRule?      @relation("TaskMappingRule", fields: [relatedMappingRuleId], references: [id])
+
+  @@map("dgmp_tasks")
+  @@index([code])
+  @@index([status])
+  @@index([taskType])
+}
+
+model TaskAssignment {
+  id          BigInt   @id @default(autoincrement())
+  taskId      BigInt   @map("task_id")
+  assignedTo  BigInt   @map("assigned_to")
+  assignedBy  BigInt?  @map("assigned_by")
+  assignedAt  DateTime @default(now()) @map("assigned_at")
+  deadline    DateTime?
+  status      String   @default("pending") @db.VarChar(20)
+  rejectReason String? @map("reject_reason") @db.Text
+
+  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  assignee User @relation("AssignedTasks", fields: [assignedTo], references: [id])
+  assigner User? @relation("TaskAssigner", fields: [assignedBy], references: [id])
+
+  @@map("dgmp_task_assignments")
+}
+
+model TaskExecution {
+  id             BigInt   @id @default(autoincrement())
+  taskId         BigInt   @map("task_id")
+  executorId     BigInt?  @map("executor_id")
+  status         String   @default("running") @db.VarChar(20)
+  startTime      DateTime @default(now()) @map("start_time")
+  endTime        DateTime? @map("end_time")
+  executionLog   String?  @map("execution_log") @db.Text
+  resultSummary  Json?    @map("result_summary")
+  processedCount Int      @default(0) @map("processed_count")
+  successCount   Int      @default(0) @map("success_count")
+  failedCount    Int      @default(0) @map("failed_count")
+  errorMessage   String?  @map("error_message") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  task     Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  executor User?  @relation("TaskExecutor", fields: [executorId], references: [id])
+
+  @@map("dgmp_task_executions")
+}
+
+model QualityCheck {
+  id          BigInt   @id @default(autoincrement())
+  code        String   @unique @db.VarChar(50)
+  name        String   @db.VarChar(100)
+  description String?  @db.Text
+  dataSource  String?  @map("data_source") @db.VarChar(100)
+  ruleIds     Json     @map("rule_ids")
+  status      String   @default("pending") @db.VarChar(20)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+  createdBy   BigInt?  @map("created_by")
+
+  creator User?           @relation(fields: [createdBy], references: [id])
+  reports QualityReport[]
+
+  @@map("dgmp_quality_checks")
+  @@index([code])
+  @@index([status])
+}
+
+model QualityReport {
+  id             BigInt   @id @default(autoincrement())
+  qualityCheckId BigInt   @map("quality_check_id")
+  checkTime      DateTime @default(now()) @map("check_time")
+  dataSource     String?  @map("data_source") @db.VarChar(100)
+  totalScore     Decimal? @map("total_score") @db.Decimal(5, 2)
+  dimensionScores Json?    @map("dimension_scores")
+  issueSummary   Json?    @map("issue_summary")
+  dataSamples    Json?    @map("data_samples")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  qualityCheck QualityCheck  @relation(fields: [qualityCheckId], references: [id], onDelete: Cascade)
+  issues       QualityIssue[]
+
+  @@map("dgmp_quality_reports")
+}
+
+model QualityIssue {
+  id               BigInt   @id @default(autoincrement())
+  qualityReportId  BigInt   @map("quality_report_id")
+  ruleId           BigInt?  @map("rule_id")
+  ruleCode         String?  @map("rule_code") @db.VarChar(50)
+  ruleName         String?  @map("rule_name") @db.VarChar(100)
+  severity         String?  @db.VarChar(20)
+  issueDescription String?  @map("issue_description") @db.Text
+  affectedRecords  Int      @default(0) @map("affected_records")
+  sampleData       Json?    @map("sample_data")
+  assigneeId       BigInt?  @map("assignee_id")
+  status           String   @default("open") @db.VarChar(20)
+  resolutionNotes  String?  @map("resolution_notes") @db.Text
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+
+  qualityReport QualityReport @relation(fields: [qualityReportId], references: [id], onDelete: Cascade)
+  rule          QualityRule?  @relation(fields: [ruleId], references: [id])
+
+  @@map("dgmp_quality_issues")
+}
+
+model ExternalDataSource {
+  id               BigInt   @id @default(autoincrement())
+  code             String   @unique @db.VarChar(50)
+  name             String   @db.VarChar(100)
+  description      String?  @db.Text
+  sourceType       String   @map("source_type") @db.VarChar(50)
+  connectionConfig Json     @map("connection_config")
+  apiEndpoint      String?  @map("api_endpoint") @db.VarChar(255)
+  apiKey           String?  @map("api_key") @db.VarChar(255)
+  status           Int      @default(1)
+  lastSyncTime     DateTime? @map("last_sync_time")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+  createdBy        BigInt?  @map("created_by")
+  updatedBy        BigInt?  @map("updated_by")
+
+  creator   User?       @relation("DataSourceCreator", fields: [createdBy], references: [id])
+  syncTasks SyncTask[]
+
+  @@map("dgmp_external_data_sources")
+  @@index([code])
+  @@index([sourceType])
+  @@index([status])
+}
+
+model SyncTask {
+  id             BigInt   @id @default(autoincrement())
+  code           String   @unique @db.VarChar(50)
+  name           String   @db.VarChar(100)
+  description    String?  @db.Text
+  syncType       String   @map("sync_type") @db.VarChar(50)
+  sourceId       BigInt   @map("source_id")
+  targetType     String   @map("target_type") @db.VarChar(50)
+  targetConfig   Json     @map("target_config")
+  syncFrequency  String   @map("sync_frequency") @db.VarChar(50)
+  cronExpression String?  @map("cron_expression") @db.VarChar(100)
+  syncEnabled    Boolean  @default(true) @map("sync_enabled")
+  lastSyncTime   DateTime? @map("last_sync_time")
+  nextSyncTime   DateTime?  @map("next_sync_time")
+  syncStatus     String   @default("idle") @map("sync_status") @db.VarChar(20)
+  syncLog        String?  @map("sync_log") @db.Text
+  errorMessage   String?  @map("error_message") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+  createdBy      BigInt?  @map("created_by")
+  updatedBy      BigInt?  @map("updated_by")
+
+  source      ExternalDataSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  creator     User?               @relation("SyncTaskCreator", fields: [createdBy], references: [id])
+  syncRecords SyncRecord[]
+
+  @@map("dgmp_sync_tasks")
+  @@index([code])
+  @@index([syncType])
+  @@index([syncStatus])
+  @@index([nextSyncTime], name: "idx_next_sync")
+}
+
+model SyncRecord {
+  id            BigInt   @id @default(autoincrement())
+  syncTaskId    BigInt   @map("sync_task_id")
+  syncTime      DateTime @default(now()) @map("sync_time")
+  syncStatus    String   @map("sync_status") @db.VarChar(20)
+  totalCount    Int      @default(0) @map("total_count")
+  successCount  Int      @default(0) @map("success_count")
+  failedCount   Int      @default(0) @map("failed_count")
+  updatedCount  Int      @default(0) @map("updated_count")
+  insertedCount Int      @default(0) @map("inserted_count")
+  syncDetails   Json?    @map("sync_details")
+  errorMessage  String?  @map("error_message") @db.Text
+  durationSeconds Int    @default(0) @map("duration_seconds")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  syncTask SyncTask @relation(fields: [syncTaskId], references: [id], onDelete: Cascade)
+
+  @@map("dgmp_sync_records")
+  @@index([syncTaskId])
+  @@index([syncTime])
+}
