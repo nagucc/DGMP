@@ -1,9 +1,7 @@
-import { defineConfig } from 'eslint'
-import next from '@next/eslint-config-next'
-
-export default defineConfig({
-  extends: [next],
+// eslint.config.js
+export default {
+  extends: ['next/core-web-vitals'],
   rules: {
     // 自定义规则
   },
-})
+};

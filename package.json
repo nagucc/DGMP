@@ -2,6 +2,7 @@
   "name": "dgmp",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -19,6 +20,7 @@
     "antd": "^6.2.2",
     "bcrypt": "^5.1.0",
     "dayjs": "^1.11.0",
+    "eslint-config-next": "^16.1.6",
     "jsonwebtoken": "^9.0.0",
     "next": "^16.1.6",
     "node-cron": "^3.0.0",
@@ -36,7 +38,6 @@
     "@types/react-dom": "^18.2.0",
     "autoprefixer": "^10.4.0",
     "eslint": "^9.39.2",
-    "eslint-config-next": "^16.1.6",
     "husky": "^8.0.0",
     "lint-staged": "^15.0.0",
     "postcss": "^8.4.0",
